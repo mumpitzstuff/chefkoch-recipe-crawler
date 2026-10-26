@@ -2,7 +2,7 @@ import re
 from scrapy.spiders import CrawlSpider, Rule, Request
 from scrapy.linkextractors import LinkExtractor
 
-from ..util import text, html, strip_hash_qs, apply_priority
+from ..util import text, html, strip_hash_qs, load_existing_recipe_ids
 
 
 class ChefkochSpider(CrawlSpider):
@@ -27,16 +27,42 @@ class ChefkochSpider(CrawlSpider):
                 restrict_css='*:not([data-vars-payed-content-type=plus_recipe]) > a'
             ),
             callback='parse_recipe',
-            process_request=apply_priority(10)
+            process_request='process_recipe_request'
         )
     )
+
+    @classmethod
+    def from_crawler(cls, crawler, *args, **kwargs):
+        spider = super().from_crawler(crawler, *args, **kwargs)
+        spider.deduplication_enabled = crawler.settings.getbool('DEDUPLICATION_ENABLED', True)
+        if spider.deduplication_enabled:
+            existing_file = crawler.settings.get('EXISTING_RECIPES_FILE', 'recipes.jsonl')
+            spider.existing_recipe_ids = load_existing_recipe_ids(existing_file)
+            if spider.existing_recipe_ids:
+                spider.logger.info('Loaded %d existing recipe IDs from %s - they will be skipped' % (len(spider.existing_recipe_ids), existing_file))
+        else:
+            spider.existing_recipe_ids = set()
+            spider.logger.info('Deduplication is disabled via DEDUPLICATION_ENABLED=False.')
+        return spider
+
+    def process_recipe_request(self, request, response):
+        if self.deduplication_enabled:
+            match = re.search(r'/rezepte/(\d+)/', request.url)
+            if match and match.group(1) in self.existing_recipe_ids:
+                return None
+        return request.replace(priority=10)
 
     def start_requests(self):
         recipe_urls = self.settings.get('RECIPE_URLS')
         if recipe_urls is not None:
             self.logger.info('Seeding from file %s' % recipe_urls)
             for line in open(recipe_urls):
-                yield Request(url=line.strip(), callback=self.parse_recipe, dont_filter=True)
+                url = line.strip()
+                if self.deduplication_enabled:
+                    match = re.search(r'/rezepte/(\d+)/', url)
+                    if match and match.group(1) in self.existing_recipe_ids:
+                        continue
+                yield Request(url=url, callback=self.parse_recipe)
         else:
             for r in super().start_requests(): yield r
 

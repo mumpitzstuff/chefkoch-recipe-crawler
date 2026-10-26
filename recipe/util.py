@@ -38,3 +38,29 @@ def apply_priority(priority):
     def process_request(request, spider):
         return request.replace(priority=priority)
     return process_request
+
+def load_existing_recipe_ids(file_path='recipes.jsonl'):
+    """Load seen recipe IDs from an existing JSON Lines file"""
+    import json
+    import os
+
+    seen = set()
+    if not file_path or not os.path.exists(file_path):
+        return seen
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                url = data.get('url', '')
+                m = re.search(r'/rezepte/(\d+)/', url)
+                if m:
+                    seen.add(m.group(1))
+                elif url:
+                    seen.add(url)
+            except Exception:
+                continue
+    return seen

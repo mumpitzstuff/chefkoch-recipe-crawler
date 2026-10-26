@@ -6,7 +6,7 @@ USER_AGENT = "RecipeSpider"
 # Pagination links only appear during browsing through the pages, needs depth.
 DEPTH_LIMIT = 200
 # Be nice and don't go too fast.
-DOWNLOAD_DELAY = 1.2
+DOWNLOAD_DELAY = 0.5
 
 # No cookies necessary.
 COOKIES_ENABLED = False
@@ -15,3 +15,10 @@ HTTPCACHE_ENABLED = True
 # Speedup when crawling from cache (at the expense of memory use)
 CONCURRENT_ITEMS = 1500
 REACTOR_THREADPOOL_MAXSIZE = 50
+
+# Deduplication of recipes (skips already scraped recipes from recipes.jsonl and drops duplicates)
+DEDUPLICATION_ENABLED = True
+
+ITEM_PIPELINES = {
+    'recipe.pipelines.DuplicatesPipeline': 300,
+}

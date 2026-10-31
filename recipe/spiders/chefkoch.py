@@ -11,9 +11,10 @@ class ChefkochSpider(CrawlSpider):
     start_urls = ['https://www.chefkoch.de/rezepte/']
 
     rules = (
-        # category pages
+        # category pages — crawled slowly to avoid triggering rate limits
         Rule(
-            LinkExtractor(allow=(r'/rs/s\d+/'))
+            LinkExtractor(allow=(r'/rs/s\d+/')),
+            process_request='process_category_request'
         ),
         # recipes
         Rule(
@@ -45,31 +46,50 @@ class ChefkochSpider(CrawlSpider):
             spider.logger.info('Deduplication is disabled via DEDUPLICATION_ENABLED=False.')
         return spider
 
+    def process_category_request(self, request, response):
+        """Apply a generous delay to category/search pages to avoid rate limiting."""
+        return request.replace(
+            meta={**request.meta, 'download_delay': self.settings.getfloat('CATEGORY_DOWNLOAD_DELAY', 30.0)}
+        )
+
     def process_recipe_request(self, request, response):
-        if self.deduplication_enabled:
-            match = re.search(r'/rezepte/(\d+)/', request.url)
-            if match and match.group(1) in self.existing_recipe_ids:
-                return None
-        return request.replace(priority=10)
+        match = re.search(r'/rezepte/(\d+)/', request.url)
+        recipe_id = match.group(1) if match else None
+
+        if self.deduplication_enabled and recipe_id and recipe_id in self.existing_recipe_ids:
+            self.logger.debug(
+                'Skipping already-known recipe %s (found on %s)', recipe_id, response.url
+            )
+            return None
+
+        self.logger.debug(
+            'Queuing recipe %s from %s', request.url, response.url
+        )
+        return request.replace(
+            priority=10,
+            meta={**request.meta, 'download_delay': self.settings.getfloat('DOWNLOAD_DELAY', 2.0)}
+        )
 
     def start_requests(self):
         recipe_urls = self.settings.get('RECIPE_URLS')
         if recipe_urls is not None:
             self.logger.info('Seeding from file %s' % recipe_urls)
-            for line in open(recipe_urls):
-                url = line.strip()
-                if self.deduplication_enabled:
-                    match = re.search(r'/rezepte/(\d+)/', url)
-                    if match and match.group(1) in self.existing_recipe_ids:
-                        continue
-                yield Request(url=url, callback=self.parse_recipe)
+            with open(recipe_urls) as fh:
+                for line in fh:
+                    url = line.strip()
+                    if self.deduplication_enabled:
+                        match = re.search(r'/rezepte/(\d+)/', url)
+                        if match and match.group(1) in self.existing_recipe_ids:
+                            continue
+                    yield Request(url=url, callback=self.parse_recipe)
         else:
             for r in super().start_requests(): yield r
 
     def parse_recipe(self, response):
         meta = {
-            text(c.css('.recipe-meta-property-group__title').get()): text(c.css('.recipe-meta-property-group__value').get())
+            k: text(c.css('.recipe-meta-property-group__value').get())
             for c in response.css('.recipe-meta-property-group__cell')
+            if (k := text(c.css('.recipe-meta-property-group__title').get())) is not None
         }
 
         rating_avg_m = re.search(r'[\d,.]+', text(response.css('.ds-rating__avg, .ds-rating-avg strong').get()) or '')

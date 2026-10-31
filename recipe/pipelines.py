@@ -2,30 +2,50 @@ import re
 from scrapy.exceptions import DropItem, NotConfigured
 from .util import load_existing_recipe_ids
 
+RECIPE_URL_RE = re.compile(r'/rezepte/(\d+)/')
+
 
 class DuplicatesPipeline:
-    """Drops duplicate recipe items based on their recipe ID or URL."""
+    """
+    Safety-net pipeline that drops duplicate recipe items by recipe ID.
+
+    The spider already skips fetching known recipe URLs via process_recipe_request(),
+    so this pipeline mainly catches duplicates that appear within a single crawl run
+    (e.g. the same recipe linked from multiple category pages).
+
+    Category pages never yield items, so they pass through untouched.
+    """
 
     @classmethod
     def from_crawler(cls, crawler):
         if not crawler.settings.getbool('DEDUPLICATION_ENABLED', True):
             raise NotConfigured("Deduplication disabled via DEDUPLICATION_ENABLED=False")
         existing_file = crawler.settings.get('EXISTING_RECIPES_FILE', 'recipes.jsonl')
-        return cls(existing_file=existing_file)
+        instance = cls(existing_file=existing_file)
+        instance.crawler = crawler
+        return instance
 
     def __init__(self, existing_file='recipes.jsonl'):
+        # Pre-load IDs from a previous run's output file so we also catch
+        # cross-run duplicates that slipped past the spider-level filter.
         self.seen_ids = load_existing_recipe_ids(existing_file)
+        self.crawler = None
 
     def process_item(self, item, spider):
         url = item.get('url') or ''
-        match = re.search(r'/rezepte/(\d+)/', url)
-        recipe_id = match.group(1) if match else url
+        match = RECIPE_URL_RE.search(url)
 
-        if not recipe_id:
+        if not match:
+            # Not a recipe item (e.g. category page somehow yielded an item);
+            # let it pass through without touching the seen-IDs set.
+            spider.logger.debug('DuplicatesPipeline: no recipe ID in URL, passing through: %s', url)
             return item
 
+        recipe_id = match.group(1)
+
         if recipe_id in self.seen_ids:
-            raise DropItem(f"Duplicate recipe dropped: {recipe_id}")
+            spider.logger.info('DuplicatesPipeline: dropping duplicate recipe %s (%s)', recipe_id, url)
+            raise DropItem(f"Duplicate recipe: {recipe_id}")
 
         self.seen_ids.add(recipe_id)
         return item

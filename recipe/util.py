@@ -22,7 +22,7 @@ def strip_hash(url):
     return url
 
 def strip_qs(url):
-    """Strip any hash from the URL given"""
+    """Strip any querystring from the URL given"""
     if not url: return None
     url = re.sub(r'\?.*$', '', url)
     return url
@@ -59,8 +59,8 @@ def load_existing_recipe_ids(file_path='recipes.jsonl'):
                 m = re.search(r'/rezepte/(\d+)/', url)
                 if m:
                     seen.add(m.group(1))
-                elif url:
-                    seen.add(url)
+                # Non-recipe URLs are intentionally ignored — ID lookups
+                # in the spider and pipeline always use numeric IDs.
             except Exception:
                 continue
     return seen

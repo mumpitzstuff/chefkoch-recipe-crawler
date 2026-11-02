@@ -48,7 +48,6 @@ class TooManyRequestsRetryMiddleware(RetryMiddleware):
                     remaining = self._delayed_call.getTime() - reactor.seconds()
                     if delay > remaining + 1:  # +1s tolerance avoids spurious resets when delays are equal
                         self._delayed_call.reset(delay)
-                        self._delayed_call.reset(delay)
                         spider.logger.info(
                             'Got 429 for %s with longer Retry-After — extending pause to %s seconds.',
                             request, delay

@@ -45,11 +45,20 @@ class Recipe(Item):
         # ingredients and preparations have their own model
         self.ingredients = [Ingredient({ 'recipe_id': id, 'index': n+1, **i }) for n,i in enumerate(self.data.pop('ingredients'))]
         self.preparation = [Preparation({ 'recipe_id': id, 'index': n+1, 'text': p }) for n,p in enumerate(self.data.pop('preparation'))]
-        # durations and tags are lists we want to squash to a single value
-        if self.data.get('durations') is not None:
+        # durations, tags and nutrition are squashed to a single string value for CSV output
+        if self.data.get('durations') is not None and isinstance(self.data['durations'], dict):
             self.data['durations'] = ' | '.join([k + ': ' + v for k,v in self.data['durations'].items()])
-        if self.data.get('tags') is not None:
+        if self.data.get('tags') is not None and isinstance(self.data['tags'], list):
             self.data['tags'] = ' | '.join(self.data['tags'])
+        if self.data.get('nutrition') is not None and isinstance(self.data['nutrition'], dict):
+            parts = []
+            for k, v in self.data['nutrition'].items():
+                if isinstance(v, dict):
+                    inner = ', '.join([f"{ik}: {iv}" for ik, iv in v.items()])
+                    parts.append(f"{k} ({inner})")
+                else:
+                    parts.append(f"{k}: {v}")
+            self.data['nutrition'] = ' | '.join(parts)
 
 class CSVWriter:
     """A generic CSV writer for dicts, emitting headers based on the first item seen"""

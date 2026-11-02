@@ -31,20 +31,23 @@ class DuplicatesPipeline:
         self.seen_ids = load_existing_recipe_ids(existing_file)
         self.crawler = None
 
-    def process_item(self, item, spider):
+    def process_item(self, item, spider=None):
+        spider = spider or (self.crawler.spider if self.crawler else None)
         url = item.get('url') or ''
         match = RECIPE_URL_RE.search(url)
 
         if not match:
             # Not a recipe item (e.g. category page somehow yielded an item);
             # let it pass through without touching the seen-IDs set.
-            spider.logger.debug('DuplicatesPipeline: no recipe ID in URL, passing through: %s', url)
+            if spider:
+                spider.logger.debug('DuplicatesPipeline: no recipe ID in URL, passing through: %s', url)
             return item
 
         recipe_id = match.group(1)
 
         if recipe_id in self.seen_ids:
-            spider.logger.info('DuplicatesPipeline: dropping duplicate recipe %s (%s)', recipe_id, url)
+            if spider:
+                spider.logger.info('DuplicatesPipeline: dropping duplicate recipe %s (%s)', recipe_id, url)
             raise DropItem(f"Duplicate recipe: {recipe_id}")
 
         self.seen_ids.add(recipe_id)

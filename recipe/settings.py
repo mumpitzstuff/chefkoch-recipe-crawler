@@ -3,11 +3,11 @@ BOT_NAME = "recipe"
 SPIDER_MODULES = ["recipe.spiders"]
 
 # Pagination links only appear during browsing through the pages, needs depth.
-DEPTH_LIMIT = 200
+DEPTH_LIMIT = 500
 
 # Per-request download delays (applied via request.meta['download_delay'] in the spider).
 # Recipe pages use DOWNLOAD_DELAY; category/search pages use CATEGORY_DOWNLOAD_DELAY.
-DOWNLOAD_DELAY = 2.0
+DOWNLOAD_DELAY = 1.2
 CATEGORY_DOWNLOAD_DELAY = 30.0
 # Disable ±50% jitter so our explicit per-request delays are applied exactly.
 # (request.meta['download_delay'] is never randomized by Scrapy regardless,

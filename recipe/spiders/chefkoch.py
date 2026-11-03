@@ -14,7 +14,7 @@ class ChefkochSpider(CrawlSpider):
     rules = (
         # category pages — crawled slowly to avoid triggering rate limits
         Rule(
-            LinkExtractor(allow=(r'/rs/s\d+/')),
+            LinkExtractor(allow=(r'/rs/s\d+(?:t\d+)?/')),
             process_request='process_category_request'
         ),
         # recipes
@@ -29,7 +29,8 @@ class ChefkochSpider(CrawlSpider):
                 restrict_css='*:not([data-vars-payed-content-type=plus_recipe]) > a'
             ),
             callback='parse_recipe',
-            process_request='process_recipe_request'
+            process_request='process_recipe_request',
+            follow=True
         )
     )
 
